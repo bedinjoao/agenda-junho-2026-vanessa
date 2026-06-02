@@ -17,11 +17,21 @@ com publicacao redundante local e externa.
 
 ## Caminhos relacionados
 
+- Link principal externo: `https://bedinjoao.github.io/agenda-junho-2026-vanessa/`.
+- Repositorio de publicacao: `https://github.com/bedinjoao/agenda-junho-2026-vanessa`.
 - Publicacao local: `/reports/agenda-junho-2026-vanessa.html` via servidor do
   Mac mini.
 - Fonte operacional do dia: `memory/2026-06-02.md` e handoffs relacionados.
+
+## Publicacao
+
+Depois de alterar `index.html`, atualizar o repositório GitHub Pages e validar
+`HTTP 200` no link principal. Vercel CLI exigiu login interativo em 2026-06-02;
+GitHub Pages ficou como rota externa permanente autenticada.
 
 ## Assinaturas
 
 2026-06-02 - Codex - criou manifesto local da agenda - README.md - registra
 contrato de publicacao externa permanente.
+2026-06-02 - Codex - publicou GitHub Pages externo - README.md/index.html -
+define link principal fora do Tailscale.
