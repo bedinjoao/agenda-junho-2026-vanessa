@@ -473,7 +473,9 @@ const STORE = FIREBASE_CONFIG ? new FirebaseStore(FIREBASE_CONFIG) : new LocalSt
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 // June 1 2026 = Monday → Mon-start weeks.
 const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30]];
-const TODAY_N = 2; // 2 June 2026
+// "Hoje" (contorno vermelho) acompanha a data real durante junho/2026; fallback dia 3.
+const _now = new Date();
+const TODAY_N = (_now.getFullYear() === 2026 && _now.getMonth() === 5) ? _now.getDate() : 3;
 
 let state = { events: SEED.map(e=>({...e})), updatedAt: new Date().toISOString() };
 
