@@ -548,15 +548,15 @@ function renderLegend(){
 function renderCalendar(){
   const cal=document.getElementById('cal'); cal.innerHTML=''; let total=0;
   WEEKS.forEach((wk,wi)=>{
+    const visibleDays = wk.filter(n=>n!==undefined && !isArchivedDay(n));
+    if(visibleDays.length===0) return;
     const row=document.createElement('div'); row.className='weekrow';
     row.innerHTML=`<div class="wlabel">Semana ${wi+1}</div>`;
     const g=document.createElement('div'); g.className='grid';
-    for(let col=0;col<7;col++){
-      const n=wk[col];
+    wk.forEach((n,col)=>{
       const cell=document.createElement('div');
       const isWeekend=col>=5;
-      if(n===undefined){ cell.className='day empty'; g.appendChild(cell); continue; }
-      if(isArchivedDay(n)){ cell.className='day empty'; g.appendChild(cell); continue; }
+      if(n===undefined || isArchivedDay(n)) return;
       const items=eventsForDay(n); total+=items.length;
       cell.className='day anchor-target'+(isWeekend?' weekend':'')+(n===TODAY_N?' today':'');
       cell.dataset.day=n;
@@ -588,7 +588,7 @@ function renderCalendar(){
 
       cell.innerHTML = head + body + addBtn;
       g.appendChild(cell);
-    }
+    });
     row.appendChild(g); cal.appendChild(row);
   });
   document.getElementById('count').textContent=total;
