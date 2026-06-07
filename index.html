@@ -93,12 +93,20 @@
   .day.weekend{background:var(--paper-2)}
   .day.today{border:2px solid var(--c-joao);box-shadow:0 0 0 4px rgba(180,69,47,.10)}
   .day.dragover{background:#fff;box-shadow:0 0 0 2px var(--brass) inset}
-  .dhead{display:flex;align-items:baseline;justify-content:space-between}
+  .day.anchor-target{scroll-margin-top:18px}
+  .dhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .dmeta{display:flex;align-items:baseline;gap:7px;min-width:0}
+  .dtools{display:flex;align-items:center;gap:2px;flex:0 0 auto}
   .dnum{font-family:Georgia,serif;font-size:21px;font-weight:600;line-height:1}
   .dwd{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
   .today .dnum{color:var(--c-joao)}
   .todaytag{font-size:9px;font-weight:800;letter-spacing:.12em;color:#fff;background:var(--c-joao);
             border-radius:5px;padding:2px 6px;text-transform:uppercase}
+  .archivebtn{border:0;background:transparent;color:var(--ink-soft);cursor:pointer;border-radius:6px;
+              padding:4px;line-height:0;min-width:27px;min-height:27px;display:inline-flex;
+              align-items:center;justify-content:center}
+  .archivebtn:hover{background:var(--paper-2);color:var(--brass)}
+  .archivebtn svg{width:14px;height:14px}
   .daddwrap{margin-top:-2px}
   .dadd{font:inherit;font-size:16px;line-height:1;color:var(--ink-soft);background:transparent;
         border:1px dashed var(--line);border-radius:7px;cursor:pointer;width:100%;padding:4px;
@@ -123,6 +131,19 @@
   .iconbtn:hover{background:var(--paper-2);color:var(--ink)}
   .iconbtn svg{width:13px;height:13px}
   .free{color:var(--ink-soft);font-size:12px;font-style:italic;opacity:.7}
+  .archive-panel{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+  .archive-panel[hidden]{display:none}
+  .archive-title{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--brass);
+                 font-weight:700;margin-bottom:8px}
+  .archive-list{display:flex;flex-wrap:wrap;gap:7px}
+  .archiveday{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
+              background:var(--card);border-radius:999px;padding:5px 8px 5px 10px;
+              color:var(--ink-soft);font-size:12px}
+  .unarchivebtn{border:0;background:transparent;color:var(--ink-soft);cursor:pointer;border-radius:50%;
+                width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;
+                line-height:0}
+  .unarchivebtn:hover{background:var(--paper-2);color:var(--ink)}
+  .unarchivebtn svg{width:13px;height:13px}
 
   footer{margin-top:26px;text-align:center;color:var(--ink-soft);font-size:12px;line-height:1.7}
 
@@ -196,6 +217,10 @@
   <div class="legend" id="legend"></div>
 
   <div id="cal"></div>
+  <div class="archive-panel" id="archivePanel" hidden>
+    <div class="archive-title">Dias arquivados</div>
+    <div class="archive-list" id="archiveList"></div>
+  </div>
 
   <footer>
     Fonte: agenda da Vanessa · <span id="count"></span> compromissos no mês ·
@@ -480,10 +505,17 @@ const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,2
 const _now = new Date();
 const TODAY_N = (_now.getFullYear() === 2026 && _now.getMonth() === 5) ? _now.getDate() : 3;
 
-let state = { events: SEED.map(e=>({...e})), updatedAt: new Date().toISOString() };
+let state = { events: SEED.map(e=>({...e})), archivedDays: [], updatedAt: new Date().toISOString() };
 
 function dayNum(dateStr){ return parseInt(dateStr.slice(-2),10); }
 function timeKey(ev){ return ev.time ? ev.time : '99:99'; } // untimed sort last
+function normalizeState(s){
+  if(!s || !Array.isArray(s.events)) return { events: SEED.map(e=>({...e})), archivedDays: [], updatedAt: new Date().toISOString() };
+  s.archivedDays = Array.isArray(s.archivedDays) ? [...new Set(s.archivedDays)].sort() : [];
+  s.updatedAt = s.updatedAt || new Date().toISOString();
+  return s;
+}
+function isArchivedDay(n){ return state.archivedDays.includes(d(n)); }
 function eventsForDay(n){
   return state.events
     .filter(e=>dayNum(e.date)===n)
@@ -524,13 +556,16 @@ function renderCalendar(){
       const cell=document.createElement('div');
       const isWeekend=col>=5;
       if(n===undefined){ cell.className='day empty'; g.appendChild(cell); continue; }
+      if(isArchivedDay(n)){ cell.className='day empty'; g.appendChild(cell); continue; }
       const items=eventsForDay(n); total+=items.length;
-      cell.className='day'+(isWeekend?' weekend':'')+(n===TODAY_N?' today':'');
+      cell.className='day anchor-target'+(isWeekend?' weekend':'')+(n===TODAY_N?' today':'');
       cell.dataset.day=n;
 
-      let head=`<div class="dhead"><span class="dnum">${String(n).padStart(2,'0')}</span>`;
+      let head=`<div class="dhead"><div class="dmeta"><span class="dnum">${String(n).padStart(2,'0')}</span>`;
       head += (n===TODAY_N) ? `<span class="todaytag">Hoje</span>` : `<span class="dwd">${WEEKDAYS[col]}</span>`;
-      head += `</div>`;
+      head += `</div><div class="dtools">`;
+      head += `<button class="archivebtn js-archive-day" data-day="${n}" title="Arquivar este dia" aria-label="Arquivar dia ${String(n).padStart(2,'0')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>`;
+      head += `</div></div>`;
 
       const itemsHtml = items.map(ev=>{
         const c=CAT[ev.cat]||CAT[DEFAULT_CAT];
@@ -557,7 +592,52 @@ function renderCalendar(){
     row.appendChild(g); cal.appendChild(row);
   });
   document.getElementById('count').textContent=total;
+  renderArchivePanel();
   wireCalendarEvents();
+}
+
+function renderArchivePanel(){
+  const panel=document.getElementById('archivePanel');
+  const list=document.getElementById('archiveList');
+  const days=(state.archivedDays||[]).map(dayNum).filter(n=>n>=1 && n<=30).sort((a,b)=>a-b);
+  panel.hidden = days.length===0;
+  list.innerHTML='';
+  days.forEach(n=>{
+    const chip=document.createElement('span');
+    chip.className='archiveday';
+    const count=eventsForDay(n).length;
+    chip.innerHTML=`<span>${String(n).padStart(2,'0')} jun${count?` · ${count}`:''}</span>`+
+      `<button class="unarchivebtn js-unarchive-day" data-day="${n}" title="Restaurar dia" aria-label="Restaurar dia ${String(n).padStart(2,'0')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>`;
+    list.appendChild(chip);
+  });
+}
+
+async function archiveDay(n){
+  const key=d(n);
+  if(state.archivedDays.includes(key)) return;
+  const count=eventsForDay(n).length;
+  const msg=count
+    ? `Arquivar o dia ${String(n).padStart(2,'0')}? Os ${count} compromissos continuam salvos e podem ser restaurados.`
+    : `Arquivar o dia ${String(n).padStart(2,'0')}? Ele pode ser restaurado depois.`;
+  if(!confirm(msg)) return;
+  state.archivedDays=[...state.archivedDays,key].sort();
+  await persist(); renderCalendar();
+}
+
+async function unarchiveDay(n){
+  const key=d(n);
+  state.archivedDays=state.archivedDays.filter(x=>x!==key);
+  await persist(); renderCalendar();
+  requestAnimationFrame(()=>scrollToDay(n));
+}
+
+function scrollToCurrentDay(){
+  requestAnimationFrame(()=>scrollToDay(TODAY_N));
+}
+
+function scrollToDay(n){
+  const el=document.querySelector(`.day[data-day="${n}"]`);
+  if(el) el.scrollIntoView({block:'start', behavior:'smooth'});
 }
 
 function esc(s){ return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
@@ -643,6 +723,12 @@ document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && overlay.classL
 document.getElementById('btnAdd').addEventListener('click',()=>openAdd(null));
 
 function wireCalendarEvents(){
+  document.querySelectorAll('.js-archive-day').forEach(b=>{
+    b.addEventListener('click',(e)=>{ e.stopPropagation(); archiveDay(parseInt(b.dataset.day,10)); });
+  });
+  document.querySelectorAll('.js-unarchive-day').forEach(b=>{
+    b.addEventListener('click',(e)=>{ e.stopPropagation(); unarchiveDay(parseInt(b.dataset.day,10)); });
+  });
   document.querySelectorAll('.js-edit').forEach(b=>{
     b.addEventListener('click',(e)=>{ e.stopPropagation(); openEdit(b.closest('.it').dataset.id); });
   });
@@ -760,7 +846,7 @@ document.getElementById('fileImport').addEventListener('change',(e)=>{
     try{
       const s=JSON.parse(r.result);
       if(!s || !Array.isArray(s.events)) throw new Error('formato inválido');
-      state=s; await persist(); renderCalendar();
+      state=normalizeState(s); await persist(); renderCalendar(); scrollToCurrentDay();
       alert('Agenda importada ('+s.events.length+' compromissos).');
     }catch(err){ alert('Falha ao importar: '+err.message); }
     e.target.value='';
@@ -776,18 +862,20 @@ async function boot(){
   renderLegend();
   const loaded = await STORE.load();
   if(loaded && Array.isArray(loaded.events)){
-    state = loaded;
+    state = normalizeState(loaded);
   }else{
     // first run on this device → persist the seed so it survives reloads
     await STORE.save(state);
   }
   document.getElementById('lastUpd').textContent = fmtUpd(state.updatedAt);
   renderCalendar();
+  scrollToCurrentDay();
   // realtime / cross-tab updates
   if(STORE.subscribe){
     STORE.subscribe((remote)=>{
       if(remote && Array.isArray(remote.events)){
         state=remote;
+        state=normalizeState(remote);
         document.getElementById('lastUpd').textContent=fmtUpd(state.updatedAt);
         renderCalendar();
       }
