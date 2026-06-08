@@ -72,6 +72,7 @@
        min-height:42px;-webkit-tap-highlight-color:transparent;transition:filter .15s}
   .btn:hover{filter:brightness(1.06)}
   .btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
   .btn svg{width:15px;height:15px}
 
   /* legenda */
@@ -201,6 +202,15 @@
 
   .syncbadge{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;
              padding:2px 7px;border:1px solid var(--line);color:var(--ink-soft)}
+  .auth-gate{display:none}
+  body.auth-pending .wrap{display:none}
+  body.auth-pending .auth-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .auth-panel{width:min(420px,100%);background:var(--card);border:1px solid var(--line);
+              border-radius:16px;padding:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+  .auth-panel h2{font-family:Georgia,"Times New Roman",serif;font-size:25px;font-weight:600;margin:0 0 8px}
+  .auth-panel p{color:var(--ink-soft);font-size:14px;margin:0 0 18px}
+  .auth-panel .btn{justify-content:center;width:100%;border-radius:10px}
+  .auth-error{display:block;color:var(--c-saude);font-size:12px;min-height:18px;margin-top:12px}
 
   @media (max-width:820px){
     body{padding:18px 12px 80px}
@@ -213,6 +223,14 @@
 </style>
 </head>
 <body>
+<div class="auth-gate">
+  <div class="auth-panel">
+    <h2>Agenda privada</h2>
+    <p>Entre com a conta Google autorizada para sincronizar os compromissos.</p>
+    <button class="btn" id="btnGoogleSignIn" type="button">Entrar com Google</button>
+    <span class="auth-error" id="authStatus"></span>
+  </div>
+</div>
 <div class="wrap">
   <header class="head">
     <div class="eyebrow">Família Bedin</div>
@@ -237,6 +255,10 @@
     <button class="btn ghost" id="btnCategories">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M12 8.5l-5 7M15 8.5l2 7M9 17.5h6"/></svg>
       Categorias
+    </button>
+    <button class="btn ghost" id="btnUndo" type="button" disabled title="Desfazer último arraste">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+      Desfazer
     </button>
     <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
   </div>
@@ -337,7 +359,16 @@
 /* ===========================================================================
    0. FIREBASE CONFIG  (null = use localStorage). See big HTML comment above.
    =========================================================================== */
-const FIREBASE_CONFIG = null; // fill to enable real cross-device sync
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyANFXLfH0ByPate0Mcl8bEQGB3Ii0I7QL8",
+  authDomain: "bona-os.firebaseapp.com",
+  projectId: "bona-os",
+  storageBucket: "bona-os.firebasestorage.app",
+  messagingSenderId: "1060396467505",
+  appId: "1:1060396467505:web:603f62b7632fa5c41cdc10",
+  measurementId: "G-809EQF90TX"
+};
+const AUTH_ALLOWLIST = ['joaobedin@gmail.com'];
 
 /* ===========================================================================
    1. CATEGORIES  → {label, color, icon(inline SVG)}
@@ -597,10 +628,59 @@ class FirebaseStore {
   async _init(){
     const appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const fsMod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
     this.fs = fsMod;
     const app = appMod.initializeApp(this.config);
+    this.auth = authMod.getAuth(app);
+    this.provider = new authMod.GoogleAuthProvider();
+    this.provider.setCustomParameters({prompt:'select_account'});
+    await authMod.setPersistence(this.auth, authMod.browserLocalPersistence);
+    this.user = await this._requireAllowedUser(authMod);
     this.db = fsMod.getFirestore(app);
     this.ref = fsMod.doc(this.db, 'agenda', FB_DOC_ID);
+  }
+  _setAuthStatus(text){
+    const el = document.getElementById('authStatus');
+    if(el) el.textContent = text || '';
+  }
+  _isAllowed(user){
+    const email = (user && user.email || '').toLowerCase();
+    return AUTH_ALLOWLIST.includes(email);
+  }
+  _requireAllowedUser(authMod){
+    document.body.classList.add('auth-pending');
+    const btn = document.getElementById('btnGoogleSignIn');
+    if(btn){
+      btn.onclick = async ()=>{
+        this._setAuthStatus('Abrindo login...');
+        try{
+          await authMod.signInWithPopup(this.auth, this.provider);
+        }catch(err){
+          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user')){
+            await authMod.signInWithRedirect(this.auth, this.provider);
+          }else{
+            this._setAuthStatus('Falha no login. Tente novamente.');
+          }
+        }
+      };
+    }
+    return new Promise((resolve, reject)=>{
+      const unsub = authMod.onAuthStateChanged(this.auth, async (user)=>{
+        if(!user){
+          this._setAuthStatus('');
+          return;
+        }
+        if(!this._isAllowed(user)){
+          this._setAuthStatus('Esta conta nao esta autorizada.');
+          await authMod.signOut(this.auth);
+          reject(new Error('Unauthorized Google account'));
+          return;
+        }
+        unsub();
+        document.body.classList.remove('auth-pending');
+        resolve(user);
+      }, reject);
+    });
   }
   async load(){
     await this._ready;
@@ -641,6 +721,7 @@ let state = {
   archivedDays: [],
   updatedAt: new Date().toISOString()
 };
+let undoStack = [];
 
 function dayNum(dateStr){ return parseInt(dateStr.slice(-2),10); }
 function timeKey(ev){ return ev.time ? ev.time : '99:99'; } // untimed sort last
@@ -669,6 +750,42 @@ async function persist(){
   CAT = state.categories;
   await STORE.save(state);
   document.getElementById('lastUpd').textContent = fmtUpd(state.updatedAt);
+}
+function pushMoveUndo(ev, fromDate, toDate){
+  undoStack.push({
+    type: 'move',
+    id: ev.id,
+    text: ev.text,
+    fromDate,
+    toDate,
+    at: Date.now()
+  });
+  undoStack = undoStack.slice(-12);
+  updateUndoButton();
+}
+function updateUndoButton(){
+  const btn = document.getElementById('btnUndo');
+  if(!btn) return;
+  const last = undoStack[undoStack.length-1];
+  btn.disabled = !last;
+  btn.title = last
+    ? `Desfazer: ${last.text} volta para ${last.fromDate.slice(-2)}/06`
+    : 'Desfazer último arraste';
+}
+async function undoLastAction(){
+  const last = undoStack.pop();
+  if(!last){ updateUndoButton(); return; }
+  if(last.type === 'move'){
+    const ev = state.events.find(x=>x.id===last.id);
+    if(ev){
+      ev.date = last.fromDate;
+      await persist();
+      renderCalendar();
+      scrollToDay(dayNum(last.fromDate));
+      return;
+    }
+  }
+  updateUndoButton();
 }
 function fmtUpd(iso){
   try{ const dt=new Date(iso);
@@ -736,6 +853,7 @@ function renderCalendar(){
   document.getElementById('count').textContent=total;
   renderArchivePanel();
   wireCalendarEvents();
+  updateUndoButton();
 }
 
 function renderArchivePanel(){
@@ -1014,6 +1132,7 @@ document.addEventListener('keydown',(e)=>{
    6. EVENT WIRING (edit/delete/add buttons)
    =========================================================================== */
 document.getElementById('btnAdd').addEventListener('click',()=>openAdd(null));
+document.getElementById('btnUndo').addEventListener('click',()=>undoLastAction());
 
 function wireCalendarEvents(){
   document.querySelectorAll('.js-archive-day').forEach(b=>{
@@ -1105,7 +1224,9 @@ function onPointerDown(e){
       const newDay=parseInt(cell.dataset.day,10);
       const ev2=state.events.find(x=>x.id===id);
       if(ev2 && dayNum(ev2.date)!==newDay){
+        const oldDate = ev2.date;
         ev2.date=d(newDay);
+        pushMoveUndo(ev2, oldDate, ev2.date);
         await persist();
       }
     }
