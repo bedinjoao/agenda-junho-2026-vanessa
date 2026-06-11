@@ -13,28 +13,9 @@
     - LocalStore  : persists to localStorage (ACTIVE BY DEFAULT, per-device).
     - FirebaseStore: persists to Cloud Firestore with realtime sync.
 
-  To enable TRUE cross-device shared sync (João + Vanessa on different phones):
-    1. Create a Firebase project at https://console.firebase.google.com
-    2. Add a Web App, enable Cloud Firestore (start in test mode or add rules).
-    3. Paste the web config object below into FIREBASE_CONFIG, e.g.:
-
-         const FIREBASE_CONFIG = {
-           apiKey: "AIza...",
-           authDomain: "your-app.firebaseapp.com",
-           projectId: "your-app",
-           storageBucket: "your-app.appspot.com",
-           messagingSenderId: "1234567890",
-           appId: "1:1234567890:web:abcdef"
-         };
-
-    Required keys: apiKey, authDomain, projectId, appId (others optional).
-    When FIREBASE_CONFIG is non-null the app automatically loads the Firebase
-    v9 modular CDN (gstatic) and switches to FirebaseStore with realtime
-    subscribe(). No code changes are needed — just fill the object.
-
-  DO NOT commit real secrets here for a private deployment without Firestore
-  security rules. Firestore web config is not strictly secret, but lock down
-  reads/writes with rules in production.
+  The public GitHub Pages link uses Firebase/Firestore so João and Vanessa see
+  the same agenda on different phones. Firebase web config is not a private
+  secret; Firestore access is limited by firestore.rules in this repository.
   ============================================================================
 -->
 
@@ -359,8 +340,15 @@
 /* ===========================================================================
    0. FIREBASE CONFIG  (null = use localStorage). See big HTML comment above.
    =========================================================================== */
-const FIREBASE_CONFIG = null; // GitHub Pages uses localStorage; Firebase is deployed separately.
-const AUTH_ALLOWLIST = ['joaobedin@gmail.com'];
+const FIREBASE_CONFIG = {
+  projectId: 'bona-os',
+  appId: '1:1060396467505:web:603f62b7632fa5c41cdc10',
+  storageBucket: 'bona-os.firebasestorage.app',
+  apiKey: 'AIzaSyANFXLfH0ByPate0Mcl8bEQGB3Ii0I7QL8',
+  authDomain: 'bona-os.firebaseapp.com',
+  messagingSenderId: '1060396467505',
+  measurementId: 'G-809EQF90TX'
+};
 
 /* ===========================================================================
    1. CATEGORIES  → {label, color, icon(inline SVG)}
@@ -620,59 +608,10 @@ class FirebaseStore {
   async _init(){
     const appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const fsMod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
     this.fs = fsMod;
     const app = appMod.initializeApp(this.config);
-    this.auth = authMod.getAuth(app);
-    this.provider = new authMod.GoogleAuthProvider();
-    this.provider.setCustomParameters({prompt:'select_account'});
-    await authMod.setPersistence(this.auth, authMod.browserLocalPersistence);
-    this.user = await this._requireAllowedUser(authMod);
     this.db = fsMod.getFirestore(app);
     this.ref = fsMod.doc(this.db, 'agenda', FB_DOC_ID);
-  }
-  _setAuthStatus(text){
-    const el = document.getElementById('authStatus');
-    if(el) el.textContent = text || '';
-  }
-  _isAllowed(user){
-    const email = (user && user.email || '').toLowerCase();
-    return AUTH_ALLOWLIST.includes(email);
-  }
-  _requireAllowedUser(authMod){
-    document.body.classList.add('auth-pending');
-    const btn = document.getElementById('btnGoogleSignIn');
-    if(btn){
-      btn.onclick = async ()=>{
-        this._setAuthStatus('Abrindo login...');
-        try{
-          await authMod.signInWithPopup(this.auth, this.provider);
-        }catch(err){
-          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user')){
-            await authMod.signInWithRedirect(this.auth, this.provider);
-          }else{
-            this._setAuthStatus('Falha no login. Tente novamente.');
-          }
-        }
-      };
-    }
-    return new Promise((resolve, reject)=>{
-      const unsub = authMod.onAuthStateChanged(this.auth, async (user)=>{
-        if(!user){
-          this._setAuthStatus('');
-          return;
-        }
-        if(!this._isAllowed(user)){
-          this._setAuthStatus('Esta conta nao esta autorizada.');
-          await authMod.signOut(this.auth);
-          reject(new Error('Unauthorized Google account'));
-          return;
-        }
-        unsub();
-        document.body.classList.remove('auth-pending');
-        resolve(user);
-      }, reject);
-    });
   }
   async load(){
     await this._ready;
