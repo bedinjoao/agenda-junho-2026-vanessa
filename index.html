@@ -215,7 +215,7 @@
 <div class="wrap">
   <header class="head">
     <div class="eyebrow">Família Bedin</div>
-    <h1>Compromissos · Junho 2026</h1>
+    <h1>Compromissos · Junho/Julho 2026</h1>
     <div class="sub">Toque em um compromisso para editar · arraste para mover de dia</div>
   </header>
   <hr class="hr">
@@ -263,7 +263,7 @@
   </div>
 
   <footer>
-    Fonte: agenda da Vanessa · <span id="count"></span> compromissos no mês ·
+    Fonte: agenda da Vanessa · <span id="count"></span> compromissos no período ·
     cor = categoria, borda vermelha = hoje<br>
     Armazenamento: <span class="syncbadge" id="syncBadge">localStorage</span> ·
     Última atualização: <span id="lastUpd">—</span>
@@ -283,7 +283,7 @@
       <div class="row2">
         <div class="field">
           <label for="fDate">Data</label>
-          <input id="fDate" type="date" min="2026-06-01" max="2026-06-30" value="2026-06-01" required>
+          <input id="fDate" type="date" min="2026-06-01" max="2026-07-08" value="2026-06-01" required>
         </div>
         <div class="field">
           <label for="fTime">Horário (opcional)</label>
@@ -471,7 +471,23 @@ function inferCategory(text){
    `time` is the canonical sortable start; original display labels preserved
    exactly via `disp` where the original was a range/short form.
    =========================================================================== */
-function d(n){ return '2026-06-'+String(n).padStart(2,'0'); }
+function d(n){
+  return n <= 30
+    ? '2026-06-'+String(n).padStart(2,'0')
+    : '2026-07-'+String(n-30).padStart(2,'0');
+}
+function serialFromDate(dateStr){
+  const [year,month,day] = String(dateStr).split('-').map(Number);
+  if(year===2026 && month===6) return day;
+  if(year===2026 && month===7) return 30 + day;
+  return day || 0;
+}
+function labelDay(n){ return String(n <= 30 ? n : n-30).padStart(2,'0'); }
+function labelMonth(n){ return n <= 30 ? 'jun' : 'jul'; }
+function fmtDateShort(dateStr){
+  const n = serialFromDate(dateStr);
+  return `${labelDay(n)}/${n <= 30 ? '06' : '07'}`;
+}
 let _sid = 0;
 function mk(n,time,disp,text,cat,bot){ return {id:'e'+(++_sid), date:d(n), time:time, disp:disp, text:text, cat:cat, bot:!!bot}; }
 
@@ -568,7 +584,32 @@ const SEED = [
   // 30
   mk(30,'09:00','9h','Crossfit Vanessa','treino'),
   mk(30,'','','Provas Pedro — História / Inglês','acal',true),
+  // Julho
+  mk(31,'','','Provas Pedro — Belas Artes / Educação Física','acal',true),
+  mk(32,'','','Provas Pedro — Ciências / Música','acal',true),
+  mk(33,'','','Provas Pedro — Vida Cristã / Latim','acal',true),
+  mk(37,'','','Prova Pedro — Matemática','acal',true),
+  mk(38,'','','Prova Pedro — Português','acal',true),
 ];
+
+const REQUIRED_EVENTS = [
+  {id:'bona-prova-pedro-2026-06-26', date:'2026-06-26', time:'', disp:'', text:'Provas Pedro — Literatura / Geografia', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-06-30', date:'2026-06-30', time:'', disp:'', text:'Provas Pedro — História / Inglês', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-07-01', date:'2026-07-01', time:'', disp:'', text:'Provas Pedro — Belas Artes / Educação Física', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-07-02', date:'2026-07-02', time:'', disp:'', text:'Provas Pedro — Ciências / Música', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-07-03', date:'2026-07-03', time:'', disp:'', text:'Provas Pedro — Vida Cristã / Latim', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-07-07', date:'2026-07-07', time:'', disp:'', text:'Prova Pedro — Matemática', cat:'acal', bot:true},
+  {id:'bona-prova-pedro-2026-07-08', date:'2026-07-08', time:'', disp:'', text:'Prova Pedro — Português', cat:'acal', bot:true},
+];
+
+function ensureRequiredEvents(events){
+  const out = Array.isArray(events) ? [...events] : [];
+  const hasEvent = (req)=>out.some(ev=>!ev.deleted && ev.date===req.date && ev.text===req.text);
+  REQUIRED_EVENTS.forEach(req=>{
+    if(!hasEvent(req)) out.push({...req, updatedAt:new Date().toISOString()});
+  });
+  return out;
+}
 
 /* ===========================================================================
    3. STORE INTERFACE  — load(), save(state), subscribe(cb)
@@ -677,11 +718,13 @@ const STORE = FIREBASE_CONFIG ? new FirebaseStore(FIREBASE_CONFIG) : new LocalSt
    4. APP STATE + RENDER
    =========================================================================== */
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-// June 1 2026 = Monday → Mon-start weeks.
-const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30]];
-// "Hoje" (contorno vermelho) acompanha a data real durante junho/2026; fallback dia 3.
+// June 1 2026 = Monday → Mon-start weeks. July uses serial days 31-38.
+const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30,31,32,33,34,35],[36,37,38]];
+// "Hoje" (contorno vermelho) acompanha a data real durante o período; fallback dia 3.
 const _now = new Date();
-const TODAY_N = (_now.getFullYear() === 2026 && _now.getMonth() === 5) ? _now.getDate() : 3;
+const TODAY_N = (_now.getFullYear() === 2026 && _now.getMonth() === 5)
+  ? _now.getDate()
+  : (_now.getFullYear() === 2026 && _now.getMonth() === 6 ? 30 + _now.getDate() : 3);
 
 let state = {
   events: SEED.map(e=>({...e})),
@@ -691,7 +734,7 @@ let state = {
 };
 let undoStack = [];
 
-function dayNum(dateStr){ return parseInt(dateStr.slice(-2),10); }
+function dayNum(dateStr){ return serialFromDate(dateStr); }
 function timeKey(ev){ return ev.time ? ev.time : '99:99'; } // untimed sort last
 function normalizeState(s){
   if(!s || !Array.isArray(s.events)){
@@ -699,6 +742,7 @@ function normalizeState(s){
   }
   s.categories = normalizeCategories(s.categories);
   CAT = s.categories;
+  s.events = ensureRequiredEvents(s.events);
   s.events = s.events.map(ev=> CAT[ev.cat] ? ev : {...ev, cat:DEFAULT_CAT});
   s.archivedDays = Array.isArray(s.archivedDays) ? [...new Set(s.archivedDays)].sort() : [];
   s.updatedAt = s.updatedAt || new Date().toISOString();
@@ -741,7 +785,7 @@ function updateUndoButton(){
   const last = undoStack[undoStack.length-1];
   btn.disabled = !last;
   btn.title = last
-    ? `Desfazer: ${last.text} volta para ${last.fromDate.slice(-2)}/06`
+    ? `Desfazer: ${last.text} volta para ${fmtDateShort(last.fromDate)}`
     : 'Desfazer último arraste';
 }
 async function undoLastAction(){
@@ -793,10 +837,11 @@ function renderCalendar(){
       cell.className='day anchor-target'+(isWeekend?' weekend':'')+(n===TODAY_N?' today':'');
       cell.dataset.day=n;
 
-      let head=`<div class="dhead"><div class="dmeta"><span class="dnum">${String(n).padStart(2,'0')}</span>`;
+      let head=`<div class="dhead"><div class="dmeta"><span class="dnum">${labelDay(n)}</span>`;
       head += (n===TODAY_N) ? `<span class="todaytag">Hoje</span>` : `<span class="dwd">${WEEKDAYS[col]}</span>`;
+      if(n > 30) head += `<span class="dwd">jul</span>`;
       head += `</div><div class="dtools">`;
-      head += `<button class="archivebtn js-archive-day" data-day="${n}" title="Arquivar este dia" aria-label="Arquivar dia ${String(n).padStart(2,'0')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>`;
+      head += `<button class="archivebtn js-archive-day" data-day="${n}" title="Arquivar este dia" aria-label="Arquivar dia ${labelDay(n)} ${labelMonth(n)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>`;
       head += `</div></div>`;
 
       const itemsHtml = items.map(ev=>{
@@ -832,15 +877,15 @@ function renderCalendar(){
 function renderArchivePanel(){
   const panel=document.getElementById('archivePanel');
   const list=document.getElementById('archiveList');
-  const days=(state.archivedDays||[]).map(dayNum).filter(n=>n>=1 && n<=30).sort((a,b)=>a-b);
+  const days=(state.archivedDays||[]).map(dayNum).filter(n=>n>=1 && n<=38).sort((a,b)=>a-b);
   panel.hidden = days.length===0;
   list.innerHTML='';
   days.forEach(n=>{
     const chip=document.createElement('span');
     chip.className='archiveday';
     const count=eventsForDay(n).length;
-    chip.innerHTML=`<span>${String(n).padStart(2,'0')} jun${count?` · ${count}`:''}</span>`+
-      `<button class="unarchivebtn js-unarchive-day" data-day="${n}" title="Restaurar dia" aria-label="Restaurar dia ${String(n).padStart(2,'0')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>`;
+    chip.innerHTML=`<span>${labelDay(n)} ${labelMonth(n)}${count?` · ${count}`:''}</span>`+
+      `<button class="unarchivebtn js-unarchive-day" data-day="${n}" title="Restaurar dia" aria-label="Restaurar dia ${labelDay(n)} ${labelMonth(n)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>`;
     list.appendChild(chip);
   });
 }
@@ -850,8 +895,8 @@ async function archiveDay(n){
   if(state.archivedDays.includes(key)) return;
   const count=eventsForDay(n).length;
   const msg=count
-    ? `Arquivar o dia ${String(n).padStart(2,'0')}? Os ${count} compromissos continuam salvos e podem ser restaurados.`
-    : `Arquivar o dia ${String(n).padStart(2,'0')}? Ele pode ser restaurado depois.`;
+    ? `Arquivar o dia ${labelDay(n)} ${labelMonth(n)}? Os ${count} compromissos continuam salvos e podem ser restaurados.`
+    : `Arquivar o dia ${labelDay(n)} ${labelMonth(n)}? Ele pode ser restaurado depois.`;
   if(!confirm(msg)) return;
   state.archivedDays=[...state.archivedDays,key].sort();
   await persist(); renderCalendar();
@@ -1252,7 +1297,9 @@ async function boot(){
   loadWeather();
   const loaded = await STORE.load();
   if(loaded && Array.isArray(loaded.events)){
+    const eventCountBeforeNormalize = loaded.events.length;
     state = normalizeState(loaded);
+    if(state.events.length !== eventCountBeforeNormalize) await STORE.save(state);
   }else{
     state = normalizeState(state);
     // first run on this device → persist the seed so it survives reloads
