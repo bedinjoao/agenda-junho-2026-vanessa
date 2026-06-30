@@ -730,8 +730,9 @@ const STORE = FIREBASE_CONFIG ? new FirebaseStore(FIREBASE_CONFIG) : new LocalSt
    4. APP STATE + RENDER
    =========================================================================== */
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-// June 1 2026 = Monday → Mon-start weeks. July uses serial days 31-38.
-const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30,31,32,33,34,35],[36,37,38]];
+// June 1 2026 = Monday → Mon-start weeks. July uses serial days 31+.
+const LAST_RENDERED_DAY = 42; // 12/07; keep the full week that contains 09/07.
+const WEEKS = [[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30,31,32,33,34,35],[36,37,38,39,40,41,42]];
 // "Hoje" (contorno vermelho) acompanha a data real durante o período; fallback dia 3.
 const _now = new Date();
 const TODAY_N = (_now.getFullYear() === 2026 && _now.getMonth() === 5)
@@ -889,7 +890,7 @@ function renderCalendar(){
 function renderArchivePanel(){
   const panel=document.getElementById('archivePanel');
   const list=document.getElementById('archiveList');
-  const days=(state.archivedDays||[]).map(dayNum).filter(n=>n>=1 && n<=38).sort((a,b)=>a-b);
+  const days=(state.archivedDays||[]).map(dayNum).filter(n=>n>=1 && n<=LAST_RENDERED_DAY).sort((a,b)=>a-b);
   panel.hidden = days.length===0;
   list.innerHTML='';
   days.forEach(n=>{
